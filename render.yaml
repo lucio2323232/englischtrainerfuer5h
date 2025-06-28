@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: englischtrainer-komplett
+    env: node
+    plan: free
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    rootDir: .
+    autoDeploy: true

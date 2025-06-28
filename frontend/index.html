@@ -1,0 +1,176 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>English Trainer</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #1e3c72, #2a5298);
+      color: white;
+      text-align: center;
+      padding: 40px;
+    }
+    h1 {
+      font-size: 3em;
+      margin-bottom: 0.2em;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 25px;
+      border-radius: 16px;
+      max-width: 600px;
+      margin: 20px auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    input, button {
+      padding: 12px;
+      margin: 10px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1em;
+    }
+    input {
+      width: 70%;
+    }
+    button {
+      background: orange;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #ff9800;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>🇬🇧 English Trainer</h1>
+  <div class="card" id="menu">
+    <button onclick="showSingleplayer()">🎯 Einzelspieler</button>
+    <button onclick="showMultiplayer()">👥 Multiplayer</button>
+  </div>
+
+  <div class="card hidden" id="singleplayer">Lade...</div>
+
+  <div class="card hidden" id="multiplayer">
+    <div>
+      <input id="mpname" placeholder="Dein Name" />
+      <button onclick="createLobby()">Lobby erstellen</button>
+    </div>
+    <div>
+      <input id="joinname" placeholder="Name" />
+      <input id="code" placeholder="Lobby-Code" />
+      <button onclick="joinLobby()">Beitreten</button>
+    </div>
+    <div id="statusBox"></div>
+    <div class="hidden" id="gameBox">
+      <p id="questionBox"></p>
+      <input id="mpanswer" placeholder="Antwort eingeben" />
+      <button onclick="submitAnswer()">Absenden</button>
+      <p id="feedback"></p>
+    </div>
+    <div class="hidden" id="resultBox"></div>
+  </div>
+
+<script>
+let code, player;
+
+function showSingleplayer() {
+  document.getElementById('menu').classList.add('hidden');
+  const box = document.getElementById('singleplayer');
+  box.classList.remove('hidden');
+  box.innerHTML = '<p>In Entwicklung: Bald verfügbar</p>';
+}
+
+function showMultiplayer() {
+  document.getElementById('menu').classList.add('hidden');
+  document.getElementById('multiplayer').classList.remove('hidden');
+}
+
+function createLobby() {
+  player = document.getElementById('mpname').value;
+  fetch('/create-lobby', { method: 'POST' })
+    .then(res => res.json())
+    .then(data => {
+      code = data.code;
+      document.getElementById('statusBox').innerText = 'Lobby erstellt! Code: ' + code;
+      joinLobbyWithName(player);
+    });
+}
+
+function joinLobby() {
+  player = document.getElementById('joinname').value;
+  code = document.getElementById('code').value.toUpperCase();
+  joinLobbyWithName(player);
+}
+
+function joinLobbyWithName(playerName) {
+  fetch('/join-lobby', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, player: playerName })
+  }).then(res => res.json()).then(data => {
+    if (data.ok) checkStatusLoop();
+    else document.getElementById('statusBox').innerText = data.error || 'Fehler beim Beitreten';
+  });
+}
+
+function checkStatusLoop() {
+  const interval = setInterval(() => {
+    fetch('/lobby-status/' + code)
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'started') {
+          clearInterval(interval);
+          startGame();
+        }
+      });
+  }, 1000);
+}
+
+function startGame() {
+  document.getElementById('gameBox').classList.remove('hidden');
+  nextQuestion();
+}
+
+function nextQuestion() {
+  fetch('/next-question/' + code)
+    .then(res => res.json())
+    .then(data => {
+      if (data.done) {
+        fetch('/results/' + code)
+          .then(res => res.json())
+          .then(score => {
+            const winner = score[player] >= Math.max(...Object.values(score)) ? "🏆 Du hast gewonnen!" : "😢 Verloren.";
+            document.getElementById('resultBox').innerHTML = `<h2>${winner}</h2><p>Punkte: ${score[player]}</p>`;
+            document.getElementById('resultBox').classList.remove('hidden');
+            document.getElementById('gameBox').classList.add('hidden');
+          });
+      } else {
+        document.getElementById('questionBox').innerText = `Was heißt: ${data.word}?`;
+        document.getElementById('feedback').innerText = '';
+        document.getElementById('mpanswer').value = '';
+      }
+    });
+}
+
+function submitAnswer() {
+  const answer = document.getElementById('mpanswer').value;
+  fetch('/answer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, player, answer })
+  }).then(() => {
+    document.getElementById('feedback').innerText = 'Antwort gesendet!';
+    setTimeout(nextQuestion, 1000);
+  });
+}
+</script>
+</body>
+</html>
